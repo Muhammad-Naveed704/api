@@ -84,6 +84,64 @@ const authorize = (...roles) => {
   };
 };
 
+// Check if user has specific permission
+const checkPermission = (permission) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        error: 'Access Denied',
+        message: 'Authentication required'
+      });
+    }
+
+    // Admin has all permissions
+    if (req.user.role === 'admin') {
+      return next();
+    }
+
+    // Check if user has the specific permission
+    if (!req.user.permissions || !req.user.permissions.includes(permission)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to access this resource'
+      });
+    }
+
+    next();
+  };
+};
+
+// Check if user has any of the specified permissions
+const checkAnyPermission = (...permissions) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        error: 'Access Denied',
+        message: 'Authentication required'
+      });
+    }
+
+    // Admin has all permissions
+    if (req.user.role === 'admin') {
+      return next();
+    }
+
+    // Check if user has any of the specified permissions
+    const hasPermission = permissions.some(permission => 
+      req.user.permissions && req.user.permissions.includes(permission)
+    );
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to access this resource'
+      });
+    }
+
+    next();
+  };
+};
+
 // Optional authentication (doesn't fail if no token)
 const optionalAuth = async (req, res, next) => {
   try {
@@ -257,6 +315,8 @@ const logActivity = (action) => {
 module.exports = {
   authenticate,
   authorize,
+  checkPermission,
+  checkAnyPermission,
   optionalAuth,
   checkOwnership,
   sensitiveOperationLimit,

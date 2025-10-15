@@ -400,6 +400,131 @@ router.put('/:id/role',
   }
 );
 
+// @route   PUT /api/users/:id/permissions
+// @desc    Update user permissions (Admin only)
+// @access  Private/Admin
+router.put('/:id/permissions',
+  authenticate,
+  authorize('admin'),
+  validateObjectId('id'),
+  [
+    body('permissions')
+      .isArray()
+      .withMessage('Permissions must be an array'),
+    handleValidationErrors
+  ],
+  logActivity('update_user_permissions'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { permissions } = req.body;
+
+      // Prevent admin from changing their own permissions
+      if (req.user._id.toString() === id) {
+        return res.status(400).json({
+          error: 'Action Not Allowed',
+          message: 'You cannot change your own permissions'
+        });
+      }
+
+      const user = await User.findByIdAndUpdate(
+        id,
+        { permissions },
+        { new: true }
+      ).select('-password -emailVerificationToken -passwordResetToken');
+
+      if (!user) {
+        return res.status(404).json({
+          error: 'User Not Found',
+          message: 'User not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'User permissions updated successfully',
+        data: { user }
+      });
+
+    } catch (error) {
+      console.error('Update user permissions error:', error);
+      res.status(500).json({
+        error: 'Update Failed',
+        message: 'Unable to update user permissions'
+      });
+    }
+  }
+);
+
+// @route   POST /api/users/create
+// @desc    Create a new user (Admin only)
+// @access  Private/Admin
+router.post('/create',
+  authenticate,
+  authorize('admin'),
+  [
+    body('name').notEmpty().withMessage('Name is required'),
+    body('email').isEmail().withMessage('Valid email is required'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('role').optional().isIn(['user', 'admin', 'moderator']).withMessage('Invalid role'),
+    body('permissions').optional().isArray().withMessage('Permissions must be an array'),
+    handleValidationErrors
+  ],
+  logActivity('create_user'),
+  async (req, res) => {
+    try {
+      const { name, email, password, role, permissions, phone } = req.body;
+
+      // Check if user already exists
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        return res.status(400).json({
+          error: 'User Already Exists',
+          message: 'A user with this email already exists'
+        });
+      }
+
+      // Create new user
+      const user = new User({
+        name,
+        email,
+        password,
+        role: role || 'user',
+        permissions: permissions || [],
+        phone,
+        isEmailVerified: true // Admin-created users are auto-verified
+      });
+
+      await user.save();
+
+      // Remove sensitive data from response
+      const userResponse = user.toObject();
+      delete userResponse.password;
+
+      res.status(201).json({
+        success: true,
+        message: 'User created successfully',
+        data: { user: userResponse }
+      });
+
+    } catch (error) {
+      console.error('Create user error:', error);
+      
+      if (error.code === 11000) {
+        return res.status(400).json({
+          error: 'Duplicate Error',
+          message: 'Email already exists'
+        });
+      }
+
+      res.status(500).json({
+        error: 'Create Failed',
+        message: 'Unable to create user'
+      });
+    }
+  }
+);
+
 // @route   POST /api/users/:id/unlock
 // @desc    Unlock user account (Admin only)
 // @access  Private/Admin

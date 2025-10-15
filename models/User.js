@@ -27,6 +27,10 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin', 'moderator'],
     default: 'user'
   },
+  permissions: [{
+    type: String,
+    trim: true
+  }],
   avatar: {
     type: String,
     default: null
